@@ -165,7 +165,6 @@ abstract class BaseController extends Controller
             json_encode(['message' => $message]),
             new \CodeIgniter\HTTP\UserAgent()
         );
-        $tempRequest->setMethod('POST');
         $tempRequest->setBody(json_encode(['message' => $message]));
         
         $generalController->request = $tempRequest;
@@ -189,7 +188,6 @@ abstract class BaseController extends Controller
             json_encode(['action' => $action, 'data' => $data]),
             new \CodeIgniter\HTTP\UserAgent()
         );
-        $tempRequest->setMethod('POST');
         $tempRequest->setBody(json_encode(['action' => $action, 'data' => $data]));
         
         $generalController->request = $tempRequest;
@@ -210,7 +208,6 @@ abstract class BaseController extends Controller
             json_encode(['room' => $room, 'user_id' => $userId]),
             new \CodeIgniter\HTTP\UserAgent()
         );
-        $tempRequest->setMethod('POST');
         $tempRequest->setBody(json_encode(['room' => $room, 'user_id' => $userId]));
         
         $generalController->request = $tempRequest;
