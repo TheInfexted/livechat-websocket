@@ -19,7 +19,7 @@ class ChatController extends BaseController
             'publicRooms' => $this->roomModel->getPublicRooms(),
             'onlineUsers' => $this->userModel->getOnlineUsers(),
             'currentUser' => $currentUser,
-            'wsUrl' => 'ws://localhost:8080' // WebSocket server URL
+            'wsUrl' => getenv('websocket.url') ? getenv('websocket.url') : 'ws://localhost:8080'
         ];
 
         return view('chat/websocket_index', $data);
@@ -60,13 +60,29 @@ class ChatController extends BaseController
             return $authCheck;
         }
 
-        $name = trim($this->request->getPost('name'));
-        $description = trim($this->request->getPost('description'));
-        $type = $this->request->getPost('type') ?? 'public';
+        // Handle both POST form data and JSON data
+        $input = $this->request->getJSON();
+        log_message('info', 'Room creation - Raw input: ' . json_encode($input));
+        log_message('info', 'Room creation - POST data: ' . json_encode($this->request->getPost()));
+        
+        if ($input) {
+            // JSON data
+            $name = trim($input->name ?? '');
+            $description = trim($input->description ?? '');
+            $type = 'public'; // Always public
+        } else {
+            // POST form data
+            $name = trim($this->request->getPost('name'));
+            $description = trim($this->request->getPost('description'));
+            $type = 'public'; // Always public
+        }
 
         if (empty($name)) {
             return $this->jsonError('Room name required');
         }
+        
+        // Debug: Log the received data
+        log_message('info', 'Room creation attempt - Name: ' . $name . ', Type: ' . $type);
 
         $currentUser = $this->getCurrentUser();
         
@@ -119,10 +135,6 @@ class ChatController extends BaseController
 
         if (!$room) {
             return $this->jsonError('Room not found', 404);
-        }
-
-        if ($room['type'] === 'private') {
-            return $this->jsonError('Cannot join private room without invitation');
         }
 
         $currentUser = $this->getCurrentUser();

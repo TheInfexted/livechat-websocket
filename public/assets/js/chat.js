@@ -27,6 +27,9 @@ function initializeChatEnhancements() {
     
     // Initialize file sharing
     initializeFileSharing();
+    
+    // Initialize message commands
+    initializeMessageCommands();
 }
 
 // Emoji Support
@@ -418,37 +421,36 @@ function initializeSoundNotifications() {
 
 // Dark Mode Toggle
 function initializeDarkMode() {
-    const darkModeEnabled = localStorage.getItem('chatDarkMode') === 'true';
+    // Check for saved dark mode preference
+    const isDarkMode = localStorage.getItem('chatDarkMode') === 'true';
     
-    if (darkModeEnabled) {
+    // Apply dark mode if saved
+    if (isDarkMode) {
         document.body.classList.add('dark-mode');
     }
     
     // Add dark mode toggle button
     addDarkModeToggle();
+}
+
+function addDarkModeToggle() {
+    const connectionStatus = document.getElementById('connectionStatus');
+    if (!connectionStatus) return;
     
-    function addDarkModeToggle() {
-        const sidebar = document.querySelector('.sidebar .p-3:first-child');
-        if (!sidebar) return;
+    const darkModeButton = document.createElement('button');
+    darkModeButton.className = 'btn btn-sm btn-outline-secondary ms-2';
+    darkModeButton.innerHTML = document.body.classList.contains('dark-mode') ? 
+        '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    darkModeButton.title = 'Toggle dark mode';
+    
+    darkModeButton.addEventListener('click', function() {
+        const isDarkMode = document.body.classList.toggle('dark-mode');
+        localStorage.setItem('chatDarkMode', isDarkMode);
         
-        const darkModeButton = document.createElement('button');
-        darkModeButton.className = 'btn btn-sm btn-outline-secondary';
-        darkModeButton.innerHTML = darkModeEnabled ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-        darkModeButton.title = darkModeEnabled ? 'Light mode' : 'Dark mode';
-        
-        darkModeButton.addEventListener('click', function() {
-            const isDark = document.body.classList.toggle('dark-mode');
-            localStorage.setItem('chatDarkMode', isDark);
-            
-            darkModeButton.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-            darkModeButton.title = isDark ? 'Light mode' : 'Dark mode';
-        });
-        
-        const headerDiv = sidebar.querySelector('.d-flex:last-child');
-        if (headerDiv) {
-            headerDiv.appendChild(darkModeButton);
-        }
-    }
+        darkModeButton.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    });
+    
+    connectionStatus.parentNode.appendChild(darkModeButton);
 }
 
 // File Sharing (Basic Implementation)

@@ -38,6 +38,7 @@ class ChatRoomModel extends Model
                    ->join('room_participants', 'room_participants.room_id = chat_rooms.id', 'left')
                    ->where('room_participants.user_id', $userId)
                    ->orWhere('chat_rooms.type', 'public')
+                   ->orWhere('chat_rooms.created_by', $userId)
                    ->groupBy('chat_rooms.id')
                    ->orderBy('chat_rooms.name', 'ASC')
                    ->findAll();

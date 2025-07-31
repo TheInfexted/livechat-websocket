@@ -54,9 +54,13 @@ class ChatWebSocketClient {
             onNewMessage: null,
             onUserJoined: null,
             onUserLeft: null,
+            onUserLeftRoom: null,
             onUserTyping: null,
             onUserStoppedTyping: null,
             onUserStatusUpdate: null,
+            onUserConnected: null,
+            onUserDisconnected: null,
+            onOnlineUsersList: null,
             onConnectionStatusChange: null,
             onReconnecting: null,
             onReconnected: null
@@ -77,7 +81,7 @@ class ChatWebSocketClient {
         this.triggerCallback('onConnectionStatusChange', 'connecting');
         
         try {
-            console.log(`Connecting to WebSocket server: ${this.wsUrl}`);
+
             this.ws = new WebSocket(this.wsUrl);
             
             this.ws.onopen = (event) => this.handleOpen(event);
@@ -117,13 +121,12 @@ class ChatWebSocketClient {
 
     // Event Handlers
     handleOpen(event) {
-        console.log('WebSocket connection established');
+        
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.stats.connectionUptime = Date.now();
         
         this.startHeartbeat();
-        this.authenticate();
         
         this.triggerCallback('onOpen', event);
         this.triggerCallback('onConnectionStatusChange', 'connected');
@@ -135,6 +138,8 @@ class ChatWebSocketClient {
             this.stats.messagesReceived++;
             this.lastPingTime = Date.now();
             
+    
+            
             this.processMessage(data);
             this.triggerCallback('onMessage', data);
         } catch (error) {
@@ -143,7 +148,7 @@ class ChatWebSocketClient {
     }
 
     handleClose(event) {
-        console.log(`WebSocket connection closed: ${event.code} - ${event.reason}`);
+
         this.isConnecting = false;
         this.isAuthenticated = false;
         this.cleanup();
@@ -169,6 +174,9 @@ class ChatWebSocketClient {
         switch (data.type) {
             case 'connection_established':
                 this.connectionId = data.connection_id;
+        
+                // Send authentication after connection is established
+                this.authenticate();
                 break;
                 
             case 'authenticated':
@@ -194,12 +202,28 @@ class ChatWebSocketClient {
                 this.triggerCallback('onNewMessage', data.message);
                 break;
                 
+            case 'user_left_room':
+                this.triggerCallback('onUserLeftRoom', data);
+                break;
+                
             case 'user_joined_room':
                 this.triggerCallback('onUserJoined', data.user, data.room_id);
                 break;
                 
-            case 'user_left_room':
-                this.triggerCallback('onUserLeft', data.user, data.room_id);
+            case 'user_status_update':
+                this.triggerCallback('onUserStatusUpdate', data);
+                break;
+                
+            case 'user_connected':
+                this.triggerCallback('onUserConnected', data);
+                break;
+                
+            case 'user_disconnected':
+                this.triggerCallback('onUserDisconnected', data);
+                break;
+                
+            case 'online_users_list':
+                this.triggerCallback('onOnlineUsersList', data.users);
                 break;
                 
             case 'user_typing_start':
@@ -215,7 +239,7 @@ class ChatWebSocketClient {
                 break;
                 
             case 'server_shutdown':
-                console.log('Server is shutting down:', data.message);
+        
                 this.disconnect(1001, 'Server shutdown');
                 break;
                 
@@ -235,10 +259,16 @@ class ChatWebSocketClient {
 
     // Message Sending
     send(data) {
-        if (this.isConnected() && this.isAuthenticated) {
+
+        
+        // Allow authentication messages even when not authenticated
+        const canSend = this.isConnected() && (this.isAuthenticated || data.type === 'authenticate');
+        
+        if (canSend) {
             try {
                 this.ws.send(JSON.stringify(data));
                 this.stats.messagesSent++;
+        
                 return true;
             } catch (error) {
                 console.error('Error sending WebSocket message:', error);
@@ -246,6 +276,7 @@ class ChatWebSocketClient {
                 return false;
             }
         } else {
+    
             this.queueMessage(data);
             return false;
         }
@@ -256,11 +287,11 @@ class ChatWebSocketClient {
             this.messageQueue.shift(); // Remove oldest message
         }
         this.messageQueue.push(data);
-        console.log(`Message queued (${this.messageQueue.length}/${this.maxQueueSize}):`, data.type);
+
     }
 
     processMessageQueue() {
-        console.log(`Processing ${this.messageQueue.length} queued messages`);
+
         while (this.messageQueue.length > 0) {
             const data = this.messageQueue.shift();
             this.send(data);
@@ -394,7 +425,7 @@ class ChatWebSocketClient {
             this.options.maxReconnectDelay
         );
         
-        console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.options.reconnectAttempts}) in ${delay}ms...`);
+
         this.triggerCallback('onReconnecting', this.reconnectAttempts, delay);
         this.triggerCallback('onConnectionStatusChange', 'reconnecting');
         
@@ -463,12 +494,12 @@ class ChatWebSocketClient {
 
     // Debug Methods
     debugInfo() {
-        console.log('WebSocket Debug Info:', {
+        return {
             url: this.wsUrl,
             state: this.getConnectionState(),
             stats: this.getStats(),
             options: this.options
-        });
+        };
     }
 }
 

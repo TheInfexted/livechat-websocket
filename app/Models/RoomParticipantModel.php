@@ -55,4 +55,6 @@ class RoomParticipantModel extends Model
         
         return array_column($result, 'room_id');
     }
+    
+
 }

@@ -16,6 +16,9 @@ use App\Models\MessageModel;
 use App\Models\RoomParticipantModel;
 use App\Models\WebSocketConnectionModel;
 
+// Controllers
+use App\Controllers\General;
+
 /**
  * Class BaseController
  *
@@ -57,6 +60,33 @@ abstract class BaseController extends Controller
      * Session instance
      */
     protected $session;
+
+    /**
+     * Create a properly initialized General controller instance
+     */
+    private function createGeneralController(array $data = []): General
+    {
+        $generalController = new General();
+        
+        // Create temporary request
+        $tempRequest = new IncomingRequest(
+            new \Config\App(),
+            new \CodeIgniter\HTTP\URI(),
+            json_encode($data),
+            new \CodeIgniter\HTTP\UserAgent()
+        );
+        $tempRequest->setBody(json_encode($data));
+        
+        // Create temporary response
+        $tempResponse = new \CodeIgniter\HTTP\Response(new \Config\App());
+        
+        // Initialize the controller properly
+        $generalController->initController($tempRequest, $tempResponse, service('logger'));
+        $generalController->request = $tempRequest;
+        $generalController->response = $tempResponse;
+        
+        return $generalController;
+    }
 
     /**
      * @return void
@@ -145,10 +175,37 @@ abstract class BaseController extends Controller
      */
     protected function generateSessionToken(int $length = 32): string
     {
-        $generalController = new General();
-        $response = $generalController->generateToken();
-        $data = json_decode($response->getBody(), true);
-        return $data['token'] ?? bin2hex(random_bytes($length));
+        // Validate input
+        $length = max(16, min(64, $length)); // Ensure length is between 16 and 64
+        
+        try {
+            $generalController = new General();
+            
+            // Create temporary request
+            $tempRequest = new IncomingRequest(
+                new \Config\App(),
+                new \CodeIgniter\HTTP\URI(),
+                json_encode(['length' => $length]),
+                new \CodeIgniter\HTTP\UserAgent()
+            );
+            $tempRequest->setBody(json_encode(['length' => $length]));
+            
+            // Create temporary response
+            $tempResponse = new \CodeIgniter\HTTP\Response(new \Config\App());
+            
+            // Initialize the controller properly
+            $generalController->initController($tempRequest, $tempResponse, service('logger'));
+            $generalController->request = $tempRequest;
+            $generalController->response = $tempResponse;
+            
+            $response = $generalController->generateToken();
+            $data = json_decode($response->getBody(), true);
+            return $data['token'] ?? bin2hex(random_bytes($length));
+        } catch (\Exception $e) {
+            // Log error and return fallback token
+            log_message('error', 'Failed to generate session token: ' . $e->getMessage());
+            return bin2hex(random_bytes($length));
+        }
     }
 
     /**
@@ -156,22 +213,45 @@ abstract class BaseController extends Controller
      */
     protected function sanitizeMessage(string $message): string
     {
-        $generalController = new General();
+        // Validate input
+        if (empty($message)) {
+            return '';
+        }
         
-        // Create temporary request
-        $tempRequest = new IncomingRequest(
-            new \Config\App(),
-            new \CodeIgniter\HTTP\URI(),
-            json_encode(['message' => $message]),
-            new \CodeIgniter\HTTP\UserAgent()
-        );
-        $tempRequest->setBody(json_encode(['message' => $message]));
+        // Limit message length to prevent abuse
+        if (strlen($message) > 1000) {
+            $message = substr($message, 0, 1000);
+        }
         
-        $generalController->request = $tempRequest;
-        $response = $generalController->sanitizeMessage();
-        $data = json_decode($response->getBody(), true);
-        
-        return $data['sanitized_message'] ?? strip_tags(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        try {
+            $generalController = new General();
+            
+            // Create temporary request
+            $tempRequest = new IncomingRequest(
+                new \Config\App(),
+                new \CodeIgniter\HTTP\URI(),
+                json_encode(['message' => $message]),
+                new \CodeIgniter\HTTP\UserAgent()
+            );
+            $tempRequest->setBody(json_encode(['message' => $message]));
+            
+            // Create temporary response
+            $tempResponse = new \CodeIgniter\HTTP\Response(new \Config\App());
+            
+            // Initialize the controller properly
+            $generalController->initController($tempRequest, $tempResponse, service('logger'));
+            $generalController->request = $tempRequest;
+            $generalController->response = $tempResponse;
+            
+            $response = $generalController->sanitizeMessage();
+            $data = json_decode($response->getBody(), true);
+            
+            return $data['sanitized_message'] ?? strip_tags(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        } catch (\Exception $e) {
+            // Log error and return fallback sanitized message
+            log_message('error', 'Failed to sanitize message: ' . $e->getMessage());
+            return strip_tags(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        }
     }
 
     /**
@@ -179,19 +259,31 @@ abstract class BaseController extends Controller
      */
     protected function logChatActivity(string $action, array $data = []): void
     {
-        $generalController = new General();
-        
-        // Create temporary request
-        $tempRequest = new IncomingRequest(
-            new \Config\App(),
-            new \CodeIgniter\HTTP\URI(),
-            json_encode(['action' => $action, 'data' => $data]),
-            new \CodeIgniter\HTTP\UserAgent()
-        );
-        $tempRequest->setBody(json_encode(['action' => $action, 'data' => $data]));
-        
-        $generalController->request = $tempRequest;
-        $generalController->logActivity();
+        try {
+            $generalController = new General();
+            
+            // Create temporary request
+            $tempRequest = new IncomingRequest(
+                new \Config\App(),
+                new \CodeIgniter\HTTP\URI(),
+                json_encode(['action' => $action, 'data' => $data]),
+                new \CodeIgniter\HTTP\UserAgent()
+            );
+            $tempRequest->setBody(json_encode(['action' => $action, 'data' => $data]));
+            
+            // Create temporary response
+            $tempResponse = new \CodeIgniter\HTTP\Response(new \Config\App());
+            
+            // Initialize the controller properly
+            $generalController->initController($tempRequest, $tempResponse, service('logger'));
+            $generalController->request = $tempRequest;
+            $generalController->response = $tempResponse;
+            
+            $generalController->logActivity();
+        } catch (\Exception $e) {
+            // Log error but don't throw - activity logging should not break the main flow
+            log_message('error', 'Failed to log chat activity: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -199,21 +291,34 @@ abstract class BaseController extends Controller
      */
     protected function validateRoomAccess(array $room, int $userId): bool
     {
-        $generalController = new General();
-        
-        // Create temporary request
-        $tempRequest = new IncomingRequest(
-            new \Config\App(),
-            new \CodeIgniter\HTTP\URI(),
-            json_encode(['room' => $room, 'user_id' => $userId]),
-            new \CodeIgniter\HTTP\UserAgent()
-        );
-        $tempRequest->setBody(json_encode(['room' => $room, 'user_id' => $userId]));
-        
-        $generalController->request = $tempRequest;
-        $response = $generalController->validateRoomAccess();
-        $data = json_decode($response->getBody(), true);
-        
-        return $data['has_access'] ?? false;
+        try {
+            $generalController = new General();
+            
+            // Create temporary request
+            $tempRequest = new IncomingRequest(
+                new \Config\App(),
+                new \CodeIgniter\HTTP\URI(),
+                json_encode(['room' => $room, 'user_id' => $userId]),
+                new \CodeIgniter\HTTP\UserAgent()
+            );
+            $tempRequest->setBody(json_encode(['room' => $room, 'user_id' => $userId]));
+            
+            // Create temporary response
+            $tempResponse = new \CodeIgniter\HTTP\Response(new \Config\App());
+            
+            // Initialize the controller properly
+            $generalController->initController($tempRequest, $tempResponse, service('logger'));
+            $generalController->request = $tempRequest;
+            $generalController->response = $tempResponse;
+            
+            $response = $generalController->validateRoomAccess();
+            $data = json_decode($response->getBody(), true);
+            
+            return $data['has_access'] ?? false;
+        } catch (\Exception $e) {
+            // Log error and return false for security (deny access on error)
+            log_message('error', 'Failed to validate room access: ' . $e->getMessage());
+            return false;
+        }
     }
 }

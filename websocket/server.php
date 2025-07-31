@@ -75,7 +75,8 @@ class ChatServer implements MessageComponentInterface
         $this->clients->attach($conn);
         $this->stats['connections']++;
         
-        $conn->chatData = [
+        // Create chat data array
+        $chatData = [
             'id' => uniqid('conn_', true),
             'user_id' => null,
             'username' => null,
@@ -84,12 +85,15 @@ class ChatServer implements MessageComponentInterface
             'connected_at' => time(),
             'message_times' => []
         ];
+        
+        // Set the property directly
+        $conn->chatData = $chatData;
 
         echo "[" . date('Y-m-d H:i:s') . "] New connection: {$conn->resourceId} (Total: {$this->stats['connections']})\n";
         
         $conn->send(json_encode([
             'type' => 'connection_established',
-            'connection_id' => $conn->chatData['id'],
+            'connection_id' => $chatData['id'],
             'server_time' => date('c')
         ]));
     }
@@ -103,6 +107,9 @@ class ChatServer implements MessageComponentInterface
                 $this->sendError($from, 'Invalid message format');
                 return;
             }
+
+            // Debug: Log received messages
+            echo "[" . date('Y-m-d H:i:s') . "] Received message from {$from->resourceId}: " . $data['type'] . "\n";
 
             // Rate limiting
             if (!$this->checkRateLimit($from)) {
@@ -169,21 +176,23 @@ class ChatServer implements MessageComponentInterface
     private function checkRateLimit(ConnectionInterface $conn)
     {
         $now = time();
+        $chatData = $conn->chatData;
         
         // Remove old timestamps (older than 1 minute)
-        $conn->chatData['message_times'] = array_filter(
-            $conn->chatData['message_times'],
+        $chatData['message_times'] = array_filter(
+            $chatData['message_times'],
             function($time) use ($now) {
                 return ($now - $time) < 60;
             }
         );
         
         // Allow max 30 messages per minute
-        if (count($conn->chatData['message_times']) >= 30) {
+        if (count($chatData['message_times']) >= 30) {
             return false;
         }
         
-        $conn->chatData['message_times'][] = $now;
+        $chatData['message_times'][] = $now;
+        $conn->chatData = $chatData;
         return true;
     }
 
@@ -204,9 +213,12 @@ class ChatServer implements MessageComponentInterface
                 return;
             }
 
-            $conn->chatData['user_id'] = $user['id'];
-            $conn->chatData['username'] = $user['username'];
-            $conn->chatData['authenticated'] = true;
+            // Update chat data properly
+            $chatData = $conn->chatData;
+            $chatData['user_id'] = $user['id'];
+            $chatData['username'] = $user['username'];
+            $chatData['authenticated'] = true;
+            $conn->chatData = $chatData;
 
             // Store connection in database
             $stmt = $this->db->prepare(
@@ -241,6 +253,9 @@ class ChatServer implements MessageComponentInterface
 
             $this->broadcastUserStatusUpdate($user['id'], 'online');
             
+            // Send current online users to the newly connected user
+            $this->sendOnlineUsersList($conn);
+            
             echo "[" . date('Y-m-d H:i:s') . "] User authenticated: {$user['username']}\n";
             
         } catch (Exception $e) {
@@ -251,7 +266,8 @@ class ChatServer implements MessageComponentInterface
 
     private function handleJoinRoom($conn, $data)
     {
-        if (!$conn->chatData['authenticated']) {
+        $chatData = $conn->chatData;
+        if (!$chatData['authenticated']) {
             $this->sendError($conn, 'Not authenticated');
             return;
         }
@@ -278,7 +294,7 @@ class ChatServer implements MessageComponentInterface
                 $stmt = $this->db->prepare(
                     "SELECT * FROM room_participants WHERE room_id = ? AND user_id = ?"
                 );
-                $stmt->execute([$roomId, $conn->chatData['user_id']]);
+                $stmt->execute([$roomId, $chatData['user_id']]);
                 
                 if (!$stmt->fetch()) {
                     $this->sendError($conn, 'Access denied to private room');
@@ -287,23 +303,24 @@ class ChatServer implements MessageComponentInterface
             }
 
             // Leave current room if any
-            if ($conn->chatData['room_id']) {
-                $this->removeFromRoom($conn, $conn->chatData['room_id']);
+            if ($chatData['room_id']) {
+                $this->removeFromRoom($conn, $chatData['room_id']);
             }
 
             // Join new room
-            $conn->chatData['room_id'] = $roomId;
+            $chatData['room_id'] = $roomId;
+            $conn->chatData = $chatData;
             
             if (!isset($this->rooms[$roomId])) {
                 $this->rooms[$roomId] = [];
             }
-            $this->rooms[$roomId][$conn->chatData['id']] = $conn;
+            $this->rooms[$roomId][$chatData['id']] = $conn;
 
             // Add to room participants if not already there
             $stmt = $this->db->prepare(
                 "INSERT IGNORE INTO room_participants (room_id, user_id) VALUES (?, ?)"
             );
-            $stmt->execute([$roomId, $conn->chatData['user_id']]);
+            $stmt->execute([$roomId, $chatData['user_id']]);
 
             // Get recent messages
             $stmt = $this->db->prepare(
@@ -338,13 +355,13 @@ class ChatServer implements MessageComponentInterface
             $this->broadcastToRoom($roomId, json_encode([
                 'type' => 'user_joined_room',
                 'user' => [
-                    'id' => $conn->chatData['user_id'],
-                    'username' => $conn->chatData['username']
+                    'id' => $chatData['user_id'],
+                    'username' => $chatData['username']
                 ],
                 'room_id' => $roomId
-            ]), $conn->chatData['id']);
+            ]), $chatData['id']);
 
-            echo "[" . date('Y-m-d H:i:s') . "] User {$conn->chatData['username']} joined room {$roomId}\n";
+            echo "[" . date('Y-m-d H:i:s') . "] User {$chatData['username']} joined room {$roomId}\n";
             
         } catch (Exception $e) {
             echo "Join room error: " . $e->getMessage() . "\n";
@@ -383,6 +400,8 @@ class ChatServer implements MessageComponentInterface
             );
             $stmt->execute([$messageId]);
             $messageData = $stmt->fetch();
+            
+            
 
             // Broadcast message to all room members
             $broadcastData = json_encode([
@@ -469,7 +488,9 @@ class ChatServer implements MessageComponentInterface
             'room_id' => $roomId
         ]), $conn->chatData['id']);
 
-        $conn->chatData['room_id'] = null;
+        $chatData = $conn->chatData;
+        $chatData['room_id'] = null;
+        $conn->chatData = $chatData;
     }
 
     private function broadcastToRoom($roomId, $message, $excludeConnectionId = null)
@@ -493,6 +514,13 @@ class ChatServer implements MessageComponentInterface
 
     private function broadcastUserStatusUpdate($userId, $status)
     {
+        // Get user details
+        $stmt = $this->db->prepare("SELECT id, username, status FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+        
+        if (!$user) return;
+        
         $message = json_encode([
             'type' => 'user_status_update',
             'user_id' => $userId,
@@ -500,14 +528,44 @@ class ChatServer implements MessageComponentInterface
             'timestamp' => date('c')
         ]);
 
+        $connectionMessage = json_encode([
+            'type' => $status === 'online' ? 'user_connected' : 'user_disconnected',
+            'user' => [
+                'id' => $user['id'],
+                'username' => $user['username'],
+                'status' => $status
+            ],
+            'timestamp' => date('c')
+        ]);
+
         foreach ($this->clients as $client) {
             if ($client->chatData['authenticated']) {
                 try {
                     $client->send($message);
+                    $client->send($connectionMessage);
                 } catch (Exception $e) {
                     echo "Error broadcasting status update: " . $e->getMessage() . "\n";
                 }
             }
+        }
+    }
+    
+    private function sendOnlineUsersList($conn)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT id, username, status FROM users WHERE status = 'online' ORDER BY username");
+            $stmt->execute();
+            $onlineUsers = $stmt->fetchAll();
+            
+            $message = json_encode([
+                'type' => 'online_users_list',
+                'users' => $onlineUsers,
+                'timestamp' => date('c')
+            ]);
+            
+            $conn->send($message);
+        } catch (Exception $e) {
+            echo "Error sending online users list: " . $e->getMessage() . "\n";
         }
     }
 

@@ -53,6 +53,7 @@
     color: #333; 
     margin-right: 50px;
     border: 1px solid #e9ecef;
+    font-weight: 500;
 }
 
 .message-bubble { 
@@ -61,12 +62,27 @@
     max-width: 70%; 
     word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: #333 !important;
+    font-weight: 500;
 }
 
 .message-meta {
     font-size: 0.75rem;
     opacity: 0.7;
     margin-top: 4px;
+}
+
+.message-header {
+    color: #666;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.message-content {
+    color: #333;
+    font-weight: 500;
+    line-height: 1.4;
 }
 
 .message.system {
@@ -135,10 +151,33 @@
     align-items: center;
     padding: 8px 0;
     border-bottom: 1px solid #f1f1f1;
+    transition: background-color 0.2s;
 }
 
 .user-item:last-child {
     border-bottom: none;
+}
+
+.user-item:hover {
+    background-color: #f8f9fa;
+}
+
+.user-item.current-user {
+    background-color: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+
+.user-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.user-info small {
+    font-size: 0.75rem;
+}
+
+.user-avatar {
+    flex-shrink: 0;
 }
 
 .avatar {
@@ -281,7 +320,7 @@
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
     .sidebar {
-        background-color: #2d3748;
+        background-color: #b4d9ec;
         border-right-color: #4a5568;
     }
     
@@ -291,13 +330,15 @@
     
     .message.other .message-bubble {
         background-color: #2d3748;
-        color: #e2e8f0;
+        color: #ffffff;
         border-color: #4a5568;
+        font-weight: 500;
     }
     
     .message.system .message-bubble {
         background-color: #4a5568;
-        color: #a0aec0;
+        color: #ffffff;
+        font-weight: 500;
     }
     
     .room-header {
@@ -309,5 +350,13 @@
     .message-input {
         background-color: #2d3748;
         border-top-color: #4a5568;
+    }
+    
+    .message-header {
+        color: #a0aec0;
+    }
+    
+    .message-content {
+        color: #ffffff;
     }
 }
